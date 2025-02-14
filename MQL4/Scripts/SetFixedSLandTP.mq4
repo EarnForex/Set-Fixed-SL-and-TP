@@ -1,7 +1,7 @@
 #property link          "https://www.earnforex.com/metatrader-scripts/set-fixed-sl-tp/"
-#property version       "1.01"
+#property version       "1.02"
 #property strict
-#property copyright     "EarnForex.com - 2023"
+#property copyright     "EarnForex.com - 2023-2025"
 #property description   "This script sets a stop-loss and, if required a take-profit, to all open orders based on filters."
 #property description   "SL and TP values are in POINTS (not pips)."
 #property description   ""
@@ -24,7 +24,13 @@ enum ENUM_ORDER_TYPES
 };
 
 input int StopLoss = 200;             // Stop-Loss in points
+input bool SLUseLevelInsteadofPoints = false; // Use level instead of points for SL
+input double StopLossLevel = 0;       // Stop-Loss level
+input bool LeaveStopLossUnchanged = false; // Leave stop-loss unchanged
 input int TakeProfit = 400;           // Take-Profit in points
+input bool TPUseLevelInsteadofPoints = false; // Use level instead of points for TP
+input double TakeProfitLevel = 0;     // Take-Profit level
+input bool LeaveTakeProfitUnchanged = false; // Leave take-profit unchanged
 input bool CurrentSymbolOnly = true;  // Current symbol only?
 input ENUM_ORDER_TYPES OrderTypeFilter = ALL_ORDERS; // Type of trades to apply to
 input bool OnlyMagicNumber = false;   // Modify only trades matching the magic number
@@ -34,6 +40,7 @@ input string MatchingComment = "";    // Matching comment
 input int Delay = 0;                  // Delay to wait between modifying trades (in milliseconds)
 input ENUM_PRICE_TYPE PriceType = ENUM_PRICE_TYPE_OPEN; // Price to use for SL/TP setting
 input bool ApplyToPending = false;    // Apply to pending orders too?
+input int AttemptsNumber = 1;         // Number of attempts for OrderModify
 
 void OnStart()
 {
@@ -43,15 +50,15 @@ void OnStart()
         return;
     }
 
-    if ((!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED)) || (!MQLInfoInteger(MQL_TRADE_ALLOWED)))
+    if (!TerminalInfoInteger(TERMINAL_TRADE_ALLOWED))
     {
-        Print("Autotrading is disable. Please enable. Exiting.");
+        Print("Autotrading is disabled in the platform's options. Please enable. Exiting.");
         return;
     }
 
-    if ((StopLoss == 0) && (TakeProfit == 0))
+    if (!MQLInfoInteger(MQL_TRADE_ALLOWED))
     {
-        Print("Both StopLoss and TakeProfit are set to zero. Exiting.");
+        Print("Autotrading is disabled in the script's options. Please enable. Exiting.");
         return;
     }
 
@@ -89,7 +96,7 @@ void OnStart()
             continue;
         }
 
-        double tick_size = MarketInfo(OrderSymbol(), MODE_TICKSIZE);
+        double tick_size = SymbolInfoDouble(symbol, SYMBOL_TRADE_TICK_SIZE);
         if (tick_size == 0)
         {
             Print("Zero tick size for ", symbol, ". Skipping.");
@@ -105,18 +112,43 @@ void OnStart()
                 Price = SymbolInfoDouble(symbol, SYMBOL_BID);
             }
             else Price = OrderOpenPrice();
-            if (TakeProfit > 0)
+            
+            // Take-profit:
+            if (LeaveTakeProfitUnchanged)
             {
-                TakeProfitPrice = NormalizeDouble(Price + TakeProfit * point, digits);
-                TakeProfitPrice = NormalizeDouble(MathRound(TakeProfitPrice / tick_size) * tick_size, digits); // Adjusting for tick size granularity.
+                TakeProfitPrice = OrderTakeProfit();
             }
-            else TakeProfitPrice = OrderTakeProfit();
-            if (StopLoss > 0)
+            else if (TPUseLevelInsteadofPoints)
             {
-                StopLossPrice = NormalizeDouble(Price - StopLoss * point, digits);
-                StopLossPrice = NormalizeDouble(MathRound(StopLossPrice / tick_size) * tick_size, digits); // Adjusting for tick size granularity.
+                TakeProfitPrice = TakeProfitLevel;
             }
-            else StopLossPrice = OrderStopLoss();
+            else
+            {
+                if (TakeProfit > 0)
+                {
+                    TakeProfitPrice = NormalizeDouble(Price + TakeProfit * point, digits);
+                    TakeProfitPrice = NormalizeDouble(MathRound(TakeProfitPrice / tick_size) * tick_size, digits); // Adjusting for tick size granularity.
+                }
+                else TakeProfitPrice = 0;
+            }
+            // Stop-loss:
+            if (LeaveStopLossUnchanged)
+            {
+                StopLossPrice = OrderStopLoss();
+            }
+            else if (SLUseLevelInsteadofPoints)
+            {
+                StopLossPrice = StopLossLevel;
+            }
+            else
+            {
+                if (StopLoss > 0)
+                {
+                    StopLossPrice = NormalizeDouble(Price - StopLoss * point, digits);
+                    StopLossPrice = NormalizeDouble(MathRound(StopLossPrice / tick_size) * tick_size, digits); // Adjusting for tick size granularity.
+                }
+                else StopLossPrice = 0;
+            }
         }
         else if ((OrderType() == OP_SELL) || (OrderType() == OP_SELLLIMIT) || (OrderType() == OP_SELLSTOP))
         {
@@ -127,32 +159,63 @@ void OnStart()
                 Price = SymbolInfoDouble(symbol, SYMBOL_ASK);
             }
             else Price = OrderOpenPrice();
-            if (TakeProfit > 0)
+            
+            // Take-profit:
+            if (LeaveTakeProfitUnchanged)
             {
-                TakeProfitPrice = NormalizeDouble(Price - TakeProfit * point, digits);
-                TakeProfitPrice = NormalizeDouble(MathRound(TakeProfitPrice / tick_size) * tick_size, digits); // Adjusting for tick size granularity.
+                TakeProfitPrice = OrderTakeProfit();
             }
-            else TakeProfitPrice = OrderTakeProfit();
-            if (StopLoss > 0)
+            else if (TPUseLevelInsteadofPoints)
             {
-                StopLossPrice = NormalizeDouble(Price + StopLoss * point, digits);
-                StopLossPrice = NormalizeDouble(MathRound(StopLossPrice / tick_size) * tick_size, digits); // Adjusting for tick size granularity.
+                TakeProfitPrice = TakeProfitLevel;
             }
-            else StopLossPrice = OrderStopLoss();
+            else
+            {
+                if (TakeProfit > 0)
+                {
+                    TakeProfitPrice = NormalizeDouble(Price - TakeProfit * point, digits);
+                    TakeProfitPrice = NormalizeDouble(MathRound(TakeProfitPrice / tick_size) * tick_size, digits); // Adjusting for tick size granularity.
+                }
+                else TakeProfitPrice = 0;
+            }
+            // Stop-loss:
+            if (LeaveStopLossUnchanged)
+            {
+                StopLossPrice = OrderStopLoss();
+            }
+            else if (SLUseLevelInsteadofPoints)
+            {
+                StopLossPrice = StopLossLevel;
+            }
+            else
+            {
+                if (StopLoss > 0)
+                {
+                    StopLossPrice = NormalizeDouble(Price + StopLoss * point, digits);
+                    StopLossPrice = NormalizeDouble(MathRound(StopLossPrice / tick_size) * tick_size, digits); // Adjusting for tick size granularity.
+                }
+                else StopLossPrice = 0;
+            }
         }
+        
+        // Avoid modifying to the same values:
+        if ((MathAbs(StopLossPrice - OrderStopLoss()) < point / 2) && (MathAbs(TakeProfitPrice - OrderTakeProfit()) < point / 2)) continue; // Nothing to change (double-safe comparison).
 
-        // Try to modify the order:
-        if (OrderModify(OrderTicket(), OrderOpenPrice(), StopLossPrice, TakeProfitPrice, OrderExpiration()))
+        for (int j = 0; j < AttemptsNumber; j++)
         {
-            TotalModified++;
+            // Try to modify the order:
+            if (OrderModify(OrderTicket(), OrderOpenPrice(), StopLossPrice, TakeProfitPrice, OrderExpiration()))
+            {
+                TotalModified++;
+                Sleep(Delay);
+                break;
+            }
+            else
+            {
+                Print("Order ", OrderTicket(), " on ", OrderSymbol(), " failed to update SL to ", StopLossPrice, " and TP to ", TakeProfitPrice, " with error - ", GetLastError());
+                Sleep(Delay);
+            }
         }
-        else
-        {
-            Print("Order failed to update with error - ", GetLastError());
-        }
-
-        // Wait if necessary.
-        Sleep(Delay);
     }
 
     Print("Total orders modified = ", TotalModified);
