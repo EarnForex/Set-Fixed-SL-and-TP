@@ -4,7 +4,7 @@ Set Fixed SL and TP is a custom MetaTrader script that sets stop-loss and take-p
 
 Its main purpose is to provide a quick way to set SL and TP on multiple positions while implementing filters to control which positions and orders to work with.
 
-![Input parameters for the Set Fixed SL and TP  script in MetaTrader 5](https://github.com/EarnForex/Set-Fixed-SL-and-TP/blob/main/README_Images/setting-up-filters-for-set-fixed-sl-and-tp-script-mt5.png)
+![Input parameters for the Set Fixed SL and TP  script in MetaTrader 5](https://github.com/EarnForex/Set-Fixed-SL-and-TP/blob/main/setting-up-filters-for-set-fixed-sl-and-tp-script-mt5.png)
 
 More information about this custom MetaTrader script is available here: https://www.earnforex.com/metatrader-scripts/set-fixed-sl-tp/
 
